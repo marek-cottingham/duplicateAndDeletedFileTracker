@@ -86,9 +86,3 @@ class archiveDatabaseTestCase(unittest.TestCase):
                     else:
                         self.assertNotIn((relative_path),result)
 
-
-            # prettyPrint(cursor, "SELECT * FROM duplicateFiles")
-            # prettyPrint(cursor, "SELECT * FROM movedFiles")
-            # prettyPrint(cursor, "SELECT * FROM newUnseenFiles")
-            # prettyPrint(cursor, "SELECT * FROM modifiedFiles")
-            # prettyPrint(cursor, "SELECT * FROM modifiedContentsFiles")
