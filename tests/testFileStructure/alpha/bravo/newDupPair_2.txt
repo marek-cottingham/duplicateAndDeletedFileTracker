@@ -1,0 +1,1 @@
+New file which is duplicate of another new file

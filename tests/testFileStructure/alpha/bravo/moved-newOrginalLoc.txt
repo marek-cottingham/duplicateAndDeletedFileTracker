@@ -1,0 +1,1 @@
+New file at location of a file which was moved
