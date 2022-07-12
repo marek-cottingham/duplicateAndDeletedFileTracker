@@ -78,9 +78,8 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
 	UPDATE archiveFiles arch
-	SET	arch.relative_path = mv.relative_path, arch.modified = mv.modified
+	SET	relative_path = mv.relative_path, modified = mv.modified
 	FROM movedFiles mv
 	WHERE arch.relative_path = mv.orginal_path;
-	COMMIT;
 END; $$
  

@@ -86,3 +86,31 @@ class archiveDatabaseTestCase(unittest.TestCase):
                     else:
                         self.assertNotIn((relative_path),result)
 
+    def test_updateArchiveMovedFiles(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+
+            cursor.execute("CALL updateArchiveMovedFiles();")
+
+            cursor.execute("SELECT * FROM movedFiles")
+            result = cursor.fetchall()
+            self.assertEqual(result, [])
+
+            cursor.execute("SELECT relative_path FROM archiveFiles")
+            result = cursor.fetchall()
+            self.assertIn(('foxtrot\\movedFile.txt',), result)
+            self.assertNotIn(('alpha\\movedFile.txt',), result)
+            self.assertIn(('foxtrot\\movedWithNewAtOrginalLoc.txt',), result)
+            self.assertNotIn(('alpha\\bravo\\moved-newOrginalLoc.txt',), result)
+
+            # In the case where a new file is created at the moved file's 
+            # orignal location, this file should now be treated 
+            # as newUnseenFile, not modifiedFile.
+
+            cursor.execute("SELECT relative_path FROM newUnseenFiles")
+            result = cursor.fetchall()
+            self.assertIn(('alpha\\bravo\\moved-newOrginalLoc.txt',),result)
+
+            cursor.execute("SELECT relative_path FROM modifiedFiles")
+            result = cursor.fetchall()
+            self.assertNotIn(('alpha\\bravo\\moved-newOrginalLoc.txt',),result)
