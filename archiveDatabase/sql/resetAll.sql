@@ -81,5 +81,14 @@ BEGIN
 	SET	relative_path = mv.relative_path, modified = mv.modified
 	FROM movedFiles mv
 	WHERE arch.relative_path = mv.orginal_path;
-END; $$
+END; $$;
  
+CREATE OR REPLACE PROCEDURE updateArchiveModifiedFiles()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	UPDATE archiveFiles arch
+	SET modified = mod.modified, file_hash = mod.file_hash
+	FROM modifiedFiles mod
+	WHERE arch.relative_path = mod.relative_path;
+END; $$;

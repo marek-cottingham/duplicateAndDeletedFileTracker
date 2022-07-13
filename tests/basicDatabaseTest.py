@@ -11,6 +11,27 @@ from tests.test_config import config
 from tests.expected_tables import currentFiles_expected_tables
 
 class archiveDatabaseTestCase(unittest.TestCase):
+    def setup_db_for_test(self, cursor: CursorInterface):
+        cursor.execute(queries.resetAll)
+        cursor.execute(queries.resetCurrentFiles)
+        cursor.execute(test_queries.setupTest_archiveFiles)
+
+    def setup_with_hash_reading(self, cursor: CursorInterface):
+        self.setup_db_for_test(cursor)
+        loadCurrentFiles(cursor, config.rootPath)
+        updateNewFilesHash(cursor, config.rootPath)
+        updateModifiedFilesHash(cursor, config.rootPath)
+
+    def pretty_print_all_views(self, cursor: CursorInterface):
+        for view in (
+                'duplicateFiles',
+                'newUnseenFiles',
+                'modifiedFiles',
+                'duplicateFiles',
+                'archiveFiles'
+            ):
+                prettyPrint(cursor, f'SELECT * FROM {view}')
+
     def test_canConnect(self):
         with openConnection(config.connect) as cursor:
             pass
@@ -43,19 +64,7 @@ class archiveDatabaseTestCase(unittest.TestCase):
                 ('foxtrot\\present_hasDup.txt', datetime.datetime(2022, 7, 12, 7, 19, 53))
             ]:
                 self.assertIn(element, result)
-
-    def setup_db_for_test(self, cursor: CursorInterface):
-        cursor.execute(queries.resetAll)
-        cursor.execute(queries.resetCurrentFiles)
-        cursor.execute(test_queries.setupTest_archiveFiles)
-
-    def setup_with_hash_reading(self, cursor: CursorInterface):
-        self.setup_db_for_test(cursor)
-        loadCurrentFiles(cursor, config.rootPath)
-        updateNewFilesHash(cursor, config.rootPath)
-        updateModifiedFilesHash(cursor, config.rootPath)
         
-
     def test_update_newPathFiles_and_modifiedFiles_hashes(self):
         with openConnection(config.connect) as cursor:
             self.setup_db_for_test(cursor)
@@ -114,3 +123,26 @@ class archiveDatabaseTestCase(unittest.TestCase):
             cursor.execute("SELECT relative_path FROM modifiedFiles")
             result = cursor.fetchall()
             self.assertNotIn(('alpha\\bravo\\moved-newOrginalLoc.txt',),result)
+
+    def test_updateArchiveModifiedFiles(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+            cursor.execute("CALL updateArchiveMovedFiles();")
+
+            cursor.execute("CALL updateArchiveModifiedFiles();")
+
+            cursor.execute("SELECT relative_path FROM modifiedFiles")
+            result = cursor.fetchall()
+            self.assertEqual(result, [])
+
+            cursor.execute("SELECT relative_path, file_hash, modified FROM archiveFiles")
+            result = cursor.fetchall()
+            self.assertIn(
+                ('alpha\\bravo\\modified.txt', 
+                    'e8ce5dcaf408935ff76747226d2e8bee4319a2f593c1d7a838115e56183d1f37', 
+                    datetime.datetime(2022, 7, 12, 16, 40, 42)),
+                result
+            )
+            
+            
+    
