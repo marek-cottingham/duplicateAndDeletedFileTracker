@@ -27,7 +27,7 @@ class archiveDatabaseTestCase(unittest.TestCase):
                 'duplicateFiles',
                 'newUnseenFiles',
                 'modifiedFiles',
-                'duplicateFiles',
+                'movedFiles',
                 'archiveFiles'
             ):
                 prettyPrint(cursor, f'SELECT * FROM {view}')
@@ -144,5 +144,20 @@ class archiveDatabaseTestCase(unittest.TestCase):
                 result
             )
             
-            
-    
+    def test_updateArchiveNewUnseenFiles(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+            cursor.execute("CALL updateArchiveMovedFiles();")
+            cursor.execute("CALL updateArchiveModifiedFiles();")
+
+            cursor.execute("CALL updateArchiveNewUnseenFiles();")
+
+            cursor.execute("SELECT relative_path FROM archiveFiles")
+            result = cursor.fetchall()
+            self.assertIn(('alpha\\bravo\\new.txt',),result)
+
+            cursor.execute("SELECT * FROM newUnseenFiles")
+            result = cursor.fetchall()
+            self.assertEqual(result, [])
+
+            self.pretty_print_all_views(cursor)

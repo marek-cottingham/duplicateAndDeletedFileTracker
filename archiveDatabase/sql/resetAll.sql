@@ -92,3 +92,11 @@ BEGIN
 	FROM modifiedFiles mod
 	WHERE arch.relative_path = mod.relative_path;
 END; $$;
+
+CREATE OR REPLACE PROCEDURE updateArchiveNewUnseenFiles()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	INSERT INTO archiveFiles (relative_path, file_hash, modified)
+	SELECT relative_path, file_hash, modified FROM newUnseenFiles;
+END; $$;
