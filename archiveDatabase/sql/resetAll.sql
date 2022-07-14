@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS currentFiles CASCADE;
 DROP TABLE IF EXISTS archiveFiles CASCADE;
+DROP TABLE IF EXISTS archiveDeletedFiles CASCADE;
 
 CREATE TABLE archiveFiles (
     file_id BIGSERIAL NOT NULL PRIMARY KEY, 
@@ -13,6 +14,14 @@ CREATE TABLE currentFiles (
 	relative_path VARCHAR NOT NULL,
 	file_hash CHAR(64),
 	modified TIMESTAMP(0)
+);
+
+CREATE TABLE archiveDeletedFiles (
+	file_id BIGSERIAL NOT NULL PRIMARY KEY,
+	relative_path VARCHAR NOT NULL,
+	file_hash CHAR(64),
+	modified TIMESTAMP(0),
+	deleteDetected TIMESTAMP(0)
 );
 
 -- Current files whose relative_path doesn't match a file in archiveFiles
@@ -31,7 +40,9 @@ CREATE VIEW newUnseenFiles AS
 SELECT new.*
 FROM newPathFiles new
 LEFT JOIN archiveFiles arch USING (file_hash)
+LEFT JOIN archiveDeletedFiles archDel USING (file_hash)
 WHERE arch.file_hash IS NULL
+	AND archDel.file_hash IS NULL
 	AND new.file_hash IS NOT NULL;
 
 -- New path files whose hash matches an existing file
@@ -73,6 +84,22 @@ CREATE VIEW modifiedContentsFiles AS
 SELECT * FROM modifiedFiles
 WHERE file_hash <> arch_hash;
 
+CREATE VIEW deletedFiles AS
+SELECT arch.* 
+FROM archiveFiles arch
+LEFT JOIN currentFiles curr
+	ON arch.relative_path = curr.relative_path
+LEFT JOIN movedFiles mv
+	ON arch.relative_path = mv.orginal_path
+WHERE curr.relative_path IS NULL
+AND mv.orginal_path IS NULL;
+
+CREATE VIEW duplicatePreviouslyDeletedFiles AS
+SELECT curr.*
+FROM currentFiles curr
+INNER JOIN archiveDeletedFiles archDel
+	ON archDel.file_hash = curr.file_hash;
+
 CREATE OR REPLACE PROCEDURE updateArchiveMovedFiles() 
 LANGUAGE plpgsql
 AS $$
@@ -98,5 +125,46 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
 	INSERT INTO archiveFiles (relative_path, file_hash, modified)
-	SELECT relative_path, file_hash, modified FROM newUnseenFiles;
+	SELECT relative_path, file_hash, modified 
+	FROM newUnseenFiles;
+END; $$;
+
+CREATE OR REPLACE PROCEDURE updateArchiveDeletedFiles()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	INSERT INTO archiveDeletedFiles (relative_path, file_hash, modified, deleteDetected)
+	SELECT relative_path, file_hash, modified, now() 
+	FROM deletedFiles;
+	DELETE FROM archiveFiles
+	WHERE file_id
+	IN (SELECT file_id FROM deletedFiles);
+END; $$;
+
+CREATE OR REPLACE PROCEDURE keepDuplicate(input_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	INSERT INTO archiveFiles (relative_path, file_hash, modified)
+	SELECT relative_path, file_hash, modified
+	FROM duplicateFiles
+	WHERE file_id = input_id; 
+END; $$;
+
+CREATE OR REPLACE PROCEDURE keepAllDuplicates()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	INSERT INTO archiveFiles (relative_path, file_hash, modified)
+	SELECT relative_path, file_hash, modified
+	FROM duplicateFiles;
+END; $$;
+
+CREATE OR REPLACE PROCEDURE removeAllDuplicates()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	DELETE FROM currentFiles
+	USING duplicateFiles
+	WHERE currentFiles.file_id = duplicateFiles.file_id;
 END; $$;

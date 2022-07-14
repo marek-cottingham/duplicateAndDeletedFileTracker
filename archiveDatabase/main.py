@@ -90,9 +90,20 @@ def updateFilesHash(
             (file_hash, file_id)
         )
 
-def prettyPrint(dbCursor: CursorInterface, query: str):
+def prettyPrint(dbCursor: CursorInterface, query: str) -> List[Tuple]:
     print("")
     print('--- ', query, ' ---')
     dbCursor.execute(query)
-    for i in dbCursor.fetchall():
+    result = dbCursor.fetchall()
+    for i in result:
         print(i)
+    return result
+
+def printDuplicateInstructions():
+    print("Enter:")
+    print("k### to keep both files")
+    print("r### to remove file (LHS)")
+    print("kall to keep all in list")
+    print("rall to remove all in list (LHS)")
+    print("skip to decide later")
+    print("exit to stop program")
