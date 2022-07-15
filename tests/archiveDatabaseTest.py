@@ -1,15 +1,14 @@
 import builtins
 import datetime
-import os
 from pathlib import Path
 import shutil
 import unittest
 from unittest.mock import MagicMock, patch
 
 from archiveDatabase import config, queries
-from archiveDatabase.main import (CursorInterface, loadCurrentFiles,
+from archiveDatabase.main import (CursorInterface, ExtendedCursorInterface, getDuplicateManagementCallbacks, loadCurrentFiles,
                                   openConnection, prettyPrint, printDuplicateInstructions, updateModifiedFilesHash,
-                                  updateNewFilesHash)
+                                  updateNewFilesHash, promptUserDuplicates)
 
 from tests import test_queries
 from tests.test_config import config
@@ -17,8 +16,9 @@ from tests.expected_tables import expected_tables
 
 class archiveDatabaseTestCase(unittest.TestCase):
     def setup_db_for_test(self, cursor: CursorInterface):
-        cursor.execute(queries.resetAll)
+        cursor.execute(queries.resetAllTables)
         cursor.execute(queries.resetCurrentFiles)
+        cursor.execute(queries.resetViewAndProcs)
         cursor.execute(test_queries.setupTest_archiveFiles)
         shutil.rmtree(config.rootPath)
         shutil.copytree(config.fileStructurePath, config.rootPath, dirs_exist_ok=True)
@@ -36,19 +36,16 @@ class archiveDatabaseTestCase(unittest.TestCase):
         cursor.execute("CALL updateArchiveNewUnseenFiles();")
         cursor.execute("CALL updateArchiveDeletedFiles();")
 
-    def assertPathInTable(self, cursor: CursorInterface, filePath: str, table: str):
-        cursor.execute(f"SELECT relative_path FROM {table}")
-        result = cursor.fetchall()
+    def assertPathInTable(self, cursor: ExtendedCursorInterface, filePath: str, table: str):
+        result = cursor.getResult(f"SELECT relative_path FROM {table}")
         self.assertIn((filePath,),result)
 
-    def assertPathNotInTable(self, cursor: CursorInterface, filePath: str, table: str):
-        cursor.execute(f"SELECT relative_path FROM {table}")
-        result = cursor.fetchall()
+    def assertPathNotInTable(self, cursor: ExtendedCursorInterface, filePath: str, table: str):
+        result = cursor.getResult(f"SELECT relative_path FROM {table}")
         self.assertNotIn((filePath,),result)
 
-    def assertEmptyTable(self, cursor: CursorInterface, table: str):
-        cursor.execute(f"SELECT * FROM {table}")
-        result = cursor.fetchall()
+    def assertEmptyTable(self, cursor: ExtendedCursorInterface, table: str):
+        result = cursor.getResult(f"SELECT * FROM {table}")
         self.assertEqual(result, [])
 
     def pretty_print_all_views(self, cursor: CursorInterface):
@@ -83,8 +80,7 @@ class archiveDatabaseTestCase(unittest.TestCase):
 
             loadCurrentFiles(cursor, config.rootPath)
 
-            cursor.execute("SELECT relative_path, modified FROM currentFiles")
-            result = cursor.fetchall()
+            result = cursor.getResult("SELECT relative_path, modified FROM currentFiles")
             for element in [
                 ('present.txt', datetime.datetime(2022, 7, 12, 7, 20)),
                 ('alpha\\new_isDup.txt', datetime.datetime(2022, 7, 12, 7, 19, 46)),
@@ -101,13 +97,12 @@ class archiveDatabaseTestCase(unittest.TestCase):
             updateNewFilesHash(cursor, config.rootPath)
             updateModifiedFilesHash(cursor, config.rootPath)
 
-            cursor.execute("SELECT relative_path, file_hash FROM currentFiles")
-            results = cursor.fetchall()
+            result = cursor.getResult("SELECT relative_path, file_hash FROM currentFiles")
             for element in [
                 ('alpha\\new_isDup.txt', '740ad0f2a20c5d4167f7a299aaa044ffddd1ea82a290cfbdcf0eefb27da342d5'),
                 ('alpha\\bravo\\modified.txt', 'e8ce5dcaf408935ff76747226d2e8bee4319a2f593c1d7a838115e56183d1f37')
             ]:
-                self.assertIn(element, results)
+                self.assertIn(element, result)
 
 
     def test_selectViews(self):
@@ -151,8 +146,7 @@ class archiveDatabaseTestCase(unittest.TestCase):
 
             self.assertEmptyTable(cursor,"modifiedFiles")
 
-            cursor.execute("SELECT relative_path, file_hash, modified FROM archiveFiles")
-            result = cursor.fetchall()
+            result = cursor.getResult("SELECT relative_path, file_hash, modified FROM archiveFiles")
             self.assertIn(
                 ('alpha\\bravo\\modified.txt', 
                     'e8ce5dcaf408935ff76747226d2e8bee4319a2f593c1d7a838115e56183d1f37', 
@@ -186,7 +180,7 @@ class archiveDatabaseTestCase(unittest.TestCase):
 
     def test_keepAllDuplicates(self):
         with openConnection(config.connect) as cursor:
-            self.setup_with_updateArchive(cursor)
+            self.setup_with_hash_reading(cursor)
 
             cursor.execute("CALL keepAllDuplicates();")
 
@@ -195,42 +189,80 @@ class archiveDatabaseTestCase(unittest.TestCase):
 
     def test_keepDuplicateById(self):
         with openConnection(config.connect) as cursor:
-            self.setup_with_updateArchive(cursor)
-
-    # @patch('builtins.print')
-    def skip_test_userPromptDuplicates(self):
-        with openConnection(config.connect) as cursor:
-            print("")
             self.setup_with_hash_reading(cursor)
 
-            while(True):
-                result = prettyPrint(cursor, "SELECT file_id, relative_path, duplicate_path FROM duplicateFiles")
-                if len(result) == 0:
-                    break
-                printDuplicateInstructions()
+            file_id = cursor.getResult(
+                "SELECT file_id FROM duplicateFiles WHERE relative_path = 'alpha\\new_isDup.txt'"
+                )[0][0]
+            cursor.execute("call keepDuplicate(%s)",(file_id,))
 
-                command = input(">>>")
+            self.assertPathNotInTable(cursor, "alpha\\new_isDup.txt", "duplicateFiles")
+            self.assertPathInTable(cursor, "alpha\\new_isDup.txt", "archiveFiles")
 
-                if (command == "exit"):
-                    exit()
-                if (command == "skip"):
-                    break
-                if (command == "kall"):
-                    cursor.execute("call keepAllDuplicates()")
-                    break
-                if (command[0] == "k"):
-                    try:
-                        input_id = int(command[1:])
-                        cursor.execute("call keepDuplicate(%s)",(input_id,))
-                    except ValueError:
-                        print("~~~ Input ID invalid ~~~")
-                if (command == "rall"):
-                    for file_id, relative_path, duplicate_path in result:
-                        Path(config.rootPath, relative_path).unlink()
-                    cursor.execute("call removeAllDuplicates()")
-                    break
-                if (command[0] == 'r'):
-                    pass
+    def test_keepDuplicateByIdSafeToPassNone(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+
+            cursor.execute("call keepDuplicate(%s)",(None,))
+
+    def test_removeAllDuplicates(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+
+            r_all = getDuplicateManagementCallbacks(
+                cursor, "duplicateFiles", config.rootPath)["rall"]
+            r_all()
+
+            self.assertEmptyTable(cursor, "duplicateFiles")
+            self.assertPathNotInTable(cursor, "alpha\\new_isDup.txt", "archiveFiles")
+            self.assertFalse(Path(config.rootPath, "alpha\\new_isDup.txt").exists())
+
+    def test_removeDuplicateById(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+
+            r_id = getDuplicateManagementCallbacks(cursor, "duplicateFiles", config.rootPath)["r###"]
+            file_id = cursor.getResult(
+                "SELECT file_id FROM duplicateFiles WHERE relative_path = 'alpha\\new_isDup.txt'"
+                )[0][0]
+            r_id(file_id)
+
+            self.assertPathNotInTable(cursor, "alpha\\new_isDup.txt", "currentFiles")
+            self.assertPathNotInTable(cursor, "alpha\\new_isDup.txt", "archiveFiles")
+            self.assertFalse(Path(config.rootPath, "alpha\\new_isDup.txt").exists())
+
+    def test_removeAllDuplicatesPreviouslyDelected(self):
+        with openConnection(config.connect) as cursor:
+            self.setup_with_hash_reading(cursor)
+
+            r_all = getDuplicateManagementCallbacks(
+                cursor, "duplicatePreviouslyDeletedFiles", config.rootPath)["rall"]
+            r_all()
+
+            self.assertEmptyTable(cursor, "duplicatePreviouslyDeletedFiles")
+            self.assertPathNotInTable(cursor, "foxtrot\\dupPreviouslyDeleted.txt", "archiveFiles")
+            self.assertFalse(Path(config.rootPath, "foxtrot\\dupPreviouslyDeleted.txt").exists())
+    
+    # @patch('builtins.print')
+    def test_userPromptDuplicates(self):
+        with openConnection(config.connect) as cursor:
+            print("")
+            self.setup_with_updateArchive(cursor)
+
+            table = "duplicateFiles"
+            table = "duplicatePreviouslyDeletedFiles"
+            cursor = cursor
+            rootPath = config.rootPath
+            query = f"SELECT file_id, relative_path, original_path FROM {table}"
+            query = f"SELECT file_id, relative_path, previously_deleted_path FROM {table}"
+
+            callbacks = getDuplicateManagementCallbacks(cursor, table, rootPath)
+
+            promptUserDuplicates(cursor, query, callbacks)
+
+    
+
+    
 
 
 

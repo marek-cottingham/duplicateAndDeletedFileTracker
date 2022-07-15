@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import contextlib
+from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import os
 from pathlib import Path
 import sys
-from typing import Iterable, List, Tuple
+from typing import Callable, Iterable, List, Tuple
 from abc import ABC, abstractmethod
 
 import psycopg2
@@ -16,14 +19,33 @@ class CursorInterface(ABC):
     def execute(self, query: str, param: Tuple = None): pass
 
     @abstractmethod
-    def fetchall(self) -> List[Tuple]: pass 
+    def fetchall(self) -> List[Tuple]: pass
+
+class ExtendedCursorInterface(CursorInterface):
+    @abstractmethod
+    def getResult(self, query: str, param: Tuple = None) -> List[Tuple]: pass
+
+@dataclass
+class CursorWrapper(ExtendedCursorInterface):
+    cursor: CursorInterface
+
+    def execute(self, query: str, param: Tuple = None):
+        return self.cursor.execute(query, param)
+
+    def fetchall(self) -> List[Tuple]:
+        return self.cursor.fetchall()
+
+    def getResult(self, query: str, param: Tuple = None) -> List[Tuple]:
+        self.execute(query, param)
+        return self.fetchall()
 
 @contextlib.contextmanager
 def openConnection(params: dict):
     conn = psycopg2.connect(**params)
     cursor = conn.cursor()
+    cursorWrapper = CursorWrapper(cursor)
     try:
-        yield cursor
+        yield cursorWrapper
     finally:
         cursor.close()
         conn.commit()
@@ -90,11 +112,16 @@ def updateFilesHash(
             (file_hash, file_id)
         )
 
-def prettyPrint(dbCursor: CursorInterface, query: str) -> List[Tuple]:
+def prettyPrint(
+    dbCursor: ExtendedCursorInterface, 
+    query: str, 
+    result: List[Tuple] | None = None
+) -> List[Tuple]:
+
     print("")
     print('--- ', query, ' ---')
-    dbCursor.execute(query)
-    result = dbCursor.fetchall()
+    if result is None:
+        result = dbCursor.getResult(query)
     for i in result:
         print(i)
     return result
@@ -102,8 +129,84 @@ def prettyPrint(dbCursor: CursorInterface, query: str) -> List[Tuple]:
 def printDuplicateInstructions():
     print("Enter:")
     print("k### to keep both files")
-    print("r### to remove file (LHS)")
+    print("r### to remove duplicate file")
     print("kall to keep all in list")
-    print("rall to remove all in list (LHS)")
+    print("rall to remove all in list")
     print("skip to decide later")
     print("exit to stop program")
+
+def promptUserDuplicates(
+    cursor: ExtendedCursorInterface, 
+    query: str, 
+    callbacks: dict[str,Callable]
+):
+    """
+    callbacks expected key-value pairs:
+        "kall": callable(),
+        "k###": callable(file_id: int),
+        "rall": callable(),
+        "r###": callable(file_id: int),
+    """
+    while(True):
+        queryResult = cursor.getResult(query)
+        emptyQuery = len(queryResult) == 0
+        if emptyQuery: break
+
+        prettyPrint(cursor, query, queryResult)
+        printDuplicateInstructions()
+
+        command = input(">>>")
+
+        if (command == "exit"): exit()
+        if (command == "skip"): break
+        if   (command == "kall"): callbacks["kall"]()
+        elif (command[0] == "k"): callbacks["k###"](parseIdFromCommand(command))
+        if   (command == "rall"): callbacks["rall"]()
+        elif (command[0] == 'r'): callbacks["r###"](parseIdFromCommand(command))
+
+def parseIdFromCommand(command):
+    input_id = None
+    try:
+        input_id = int(command[1:])
+    except ValueError:
+        print("~~~ Input ID invalid ~~~")
+    return input_id
+
+def getDuplicateManagementCallbacks(cursor: ExtendedCursorInterface, duplicateView: str, rootPath: Path):
+    if duplicateView == "duplicateFiles":
+        k_all_proc = "keepAllDuplicates"
+        k_id_proc = "keepDuplicate"
+        r_all_proc = "removeAllDuplicates"
+        r_id_proc = "removeDuplicate"
+            
+    if duplicateView == "duplicatePreviouslyDeletedFiles":
+        k_all_proc = "keepAllDuplicatesDeleted"
+        k_id_proc = "keepDuplicateDeleted"
+        r_all_proc = "removeAllDuplicatesDeleted"
+        r_id_proc = "removeDuplicate"
+
+    def rall():
+        for (relative_path,) in cursor.getResult(f"SELECT relative_path FROM {duplicateView}"):
+            Path(rootPath, relative_path).unlink()
+        cursor.execute(f"call {r_all_proc}()")
+
+    def r_id(id):
+        if id is None: return
+        for (relative_path,) in cursor.getResult(
+                f"SELECT relative_path FROM {duplicateView} WHERE file_id = {id}"
+            ):
+            Path(rootPath, relative_path).unlink()
+            cursor.execute(f"call {r_id_proc}(%s)",(id,))
+
+    def k_id(id):
+        if id is None: return
+        cursor.execute(f"call {k_id_proc}(%s)",(id,))
+
+    callbacks = {
+            "kall": lambda   : cursor.execute(f"call {k_all_proc}()"),
+            "k###": k_id,
+            "rall": rall,
+            "r###": r_id
+        }
+    
+    return callbacks

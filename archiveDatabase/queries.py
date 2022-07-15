@@ -3,4 +3,5 @@ from . import sql
 
 selectAllCurrentFiles = "SELECT * FROM currentFiles;"
 resetCurrentFiles = "DELETE FROM currentFiles;"
-resetAll = files(sql).joinpath('resetAll.sql').read_text()
+resetAllTables = files(sql).joinpath('resetAllTables.sql').read_text()
+resetViewAndProcs = files(sql).joinpath('resetViewsAndProcs.sql').read_text()
