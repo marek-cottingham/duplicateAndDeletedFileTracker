@@ -7,4 +7,6 @@ class config:
         'dbname': 'NAME',
         'user': 'USERNAME',
         'password': 'PASSWORD'
+        'host': 'localhost',
+        'port': 5432,
     }
