@@ -6,7 +6,7 @@ class config:
     rootPath: Path = None
     fileStructurePath: Path = None
     connect: dict = {
-        'dbname': 'photoArchiveTest',
+        'dbname': 'duplicateAndDeletedFileTrackerTest',
         'user': 'postgres',
         'password': 'test'
     }
