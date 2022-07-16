@@ -1,6 +1,6 @@
 
-from archiveDatabase import config, queries
-from archiveDatabase.main import (getDuplicateManagementCallbacks,
+from duplicateAndDeletedFileTracker import config, queries
+from duplicateAndDeletedFileTracker.main import (getDuplicateManagementCallbacks,
                                   loadCurrentFiles, openConnection, prettyPrint,
                                   promptUserDuplicates,
                                   updateModifiedFilesHash, updateNewFilesHash)

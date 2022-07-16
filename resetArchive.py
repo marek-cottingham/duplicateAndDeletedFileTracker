@@ -1,6 +1,6 @@
-from archiveDatabase import queries
-from archiveDatabase.config import config
-from archiveDatabase.main import openConnection
+from duplicateAndDeletedFileTracker import queries
+from duplicateAndDeletedFileTracker.config import config
+from duplicateAndDeletedFileTracker.main import openConnection
 
 while(True):
     print("WARNING This will delete ALL archive data in database:")
