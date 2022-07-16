@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 
 import psycopg2
 
-from archiveDatabase import queries
+from . import queries
 
 class CursorInterface(ABC):
     @abstractmethod

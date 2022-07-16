@@ -5,8 +5,8 @@ import shutil
 import unittest
 from unittest.mock import MagicMock, patch
 
-from archiveDatabase import config, queries
-from archiveDatabase.main import (CursorInterface, ExtendedCursorInterface, getDuplicateManagementCallbacks, loadCurrentFiles,
+from duplicateAndDeletedFileTracker import config, queries
+from duplicateAndDeletedFileTracker.main import (CursorInterface, ExtendedCursorInterface, getDuplicateManagementCallbacks, loadCurrentFiles,
                                   openConnection, prettyPrint, printDuplicateInstructions, updateModifiedFilesHash,
                                   updateNewFilesHash, promptUserDuplicates)
 
@@ -115,8 +115,6 @@ class archiveDatabaseTestCase(unittest.TestCase):
                         self.assertPathInTable(cursor, relative_path, view)
                     else:
                         self.assertPathNotInTable(cursor, relative_path, view)
-
-            # self.pretty_print_all_views(cursor)
 
     def test_updateArchiveMovedFiles(self):
         with openConnection(config.connect) as cursor:
@@ -243,22 +241,6 @@ class archiveDatabaseTestCase(unittest.TestCase):
             self.assertPathNotInTable(cursor, "foxtrot\\dupPreviouslyDeleted.txt", "archiveFiles")
             self.assertFalse(Path(config.rootPath, "foxtrot\\dupPreviouslyDeleted.txt").exists())
     
-    # @patch('builtins.print')
-    def test_userPromptDuplicates(self):
-        with openConnection(config.connect) as cursor:
-            print("")
-            self.setup_with_updateArchive(cursor)
-
-            table = "duplicateFiles"
-            table = "duplicatePreviouslyDeletedFiles"
-            cursor = cursor
-            rootPath = config.rootPath
-            query = f"SELECT file_id, relative_path, original_path FROM {table}"
-            query = f"SELECT file_id, relative_path, previously_deleted_path FROM {table}"
-
-            callbacks = getDuplicateManagementCallbacks(cursor, table, rootPath)
-
-            promptUserDuplicates(cursor, query, callbacks)
 
     
 
