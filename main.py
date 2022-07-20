@@ -13,9 +13,16 @@ with openConnection(config.connect) as cursor:
     updateNewFilesHash(cursor, config.rootPath)
     updateModifiedFilesHash(cursor, config.rootPath)
 
+    prettyPrint(cursor, "SELECT relative_path, original_path FROM movedFiles")
     cursor.execute("CALL updateArchiveMovedFiles();")
+
+    prettyPrint(cursor, "SELECT relative_path FROM modifiedFiles")
     cursor.execute("CALL updateArchiveModifiedFiles();")
+
+    prettyPrint(cursor, "SELECT relative_path FROM newUnseenFiles")
     cursor.execute("CALL updateArchiveNewUnseenFiles();")
+
+    prettyPrint(cursor, "SELECT relative_path FROM deletedFiles")
     cursor.execute("CALL updateArchiveDeletedFiles();")
 
     callbacksDup = getDuplicateManagementCallbacks(cursor, "duplicateFiles", config.rootPath)
@@ -35,4 +42,4 @@ with openConnection(config.connect) as cursor:
         callbacksPrevDup
     )
 
-    prettyPrint(cursor,"SELECT file_id, relative_path, duplicate_path FROM duplicatesInArchive")
+    # prettyPrint(cursor,"SELECT file_id, relative_path, duplicate_path FROM duplicatesInArchive")
