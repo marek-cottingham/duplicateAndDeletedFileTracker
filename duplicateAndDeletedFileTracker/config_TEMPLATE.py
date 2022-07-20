@@ -6,5 +6,7 @@ class config:
     connect: dict = {
         'dbname': 'NAME',
         'user': 'USERNAME',
-        'password': 'PASSWORD'
+        'password': 'PASSWORD',
+        'host': 'localhost',
+        'port': 5432,
     }
