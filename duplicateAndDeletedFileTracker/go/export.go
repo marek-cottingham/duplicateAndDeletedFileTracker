@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"unsafe"
 
 	"golang.org/x/sync/errgroup"
@@ -27,8 +26,7 @@ func hash_file(filePath string) (string, error) {
 		return "", err
 	}
 
-	return "hash", nil
-	//return string(sha256.Sum(nil)), nil
+	return fmt.Sprintf("%x", sha256.Sum(nil)), nil
 }
 
 func hash_list(filePaths []string) []string {
@@ -53,16 +51,28 @@ func hash_list(filePaths []string) []string {
 }
 
 //export c_hash_list
-func c_hash_list(path_list **C.char) *C.char {
+func c_hash_list(path_list **C.char, length C.int) **C.char {
 	var slice []string
-	for _, s := range unsafe.Slice(path_list, 1<<22) {
+	for _, s := range unsafe.Slice(path_list, length) {
 		if s == nil {
 			break
 		}
-		slice = append(slice, C.GoString(s))
+		x := C.GoString(s)
+		slice = append(slice, x)
 	}
 	hashes := hash_list(slice)
-	return C.CString(strings.Join(hashes, "\n"))
+
+	cArray := C.malloc(C.size_t(len(hashes)) * C.size_t(unsafe.Sizeof(uintptr(0))))
+	goArray := (*[1<<30 - 1]*C.char)(cArray)
+	for idx, substring := range hashes {
+		goArray[idx] = C.CString(substring)
+	}
+	return (**C.char)(cArray)
+}
+
+//export free_string_array
+func free_string_array(p **C.char) {
+	C.free(unsafe.Pointer(p))
 }
 
 //export c_hash_file
@@ -73,12 +83,6 @@ func c_hash_file(path *C.char) *C.char {
 
 //export free_string
 func free_string(p *C.char) {
-	fmt.Println(C.GoString(p))
-	C.free(unsafe.Pointer(p))
-}
-
-//export free_string_list
-func free_string_list(p **C.char) {
 	C.free(unsafe.Pointer(p))
 }
 

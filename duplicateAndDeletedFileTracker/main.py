@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
-from datetime import datetime
 import hashlib
 import os
-from pathlib import Path
-import sys
-from typing import Callable, Iterable, List, Tuple
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Iterable, List, Tuple
 
 import psycopg2
 
 from . import queries
+from .goInterface import goFilesHash
+
 
 class CursorInterface(ABC):
     @abstractmethod
@@ -92,12 +93,12 @@ def loadCurrentFiles(dbCursor: CursorInterface, rootDir: Path):
 def updateNewFilesHash(dbCursor: CursorInterface, rootDir: Path):
     dbCursor.execute("SELECT file_id, relative_path FROM newPathFilesWithoutHash")
     files_id_path = dbCursor.fetchall()
-    updateFilesHash(dbCursor, rootDir, files_id_path, "currentFiles")
+    goUpdateFilesHash(dbCursor, rootDir, files_id_path, "currentFiles")
 
 def updateModifiedFilesHash(dbCursor: CursorInterface, rootDir: Path):
     dbCursor.execute("SELECT file_id, relative_path FROM modifiedFiles")
     files_id_path = dbCursor.fetchall()
-    updateFilesHash(dbCursor, rootDir, files_id_path, "currentFiles")
+    goUpdateFilesHash(dbCursor, rootDir, files_id_path, "currentFiles")
 
 def updateFilesHash(
     dbCursor: CursorInterface, 
@@ -111,6 +112,26 @@ def updateFilesHash(
             f"UPDATE {table_name} SET file_hash = %s WHERE file_id = %s",
             (file_hash, file_id)
         )
+
+def goUpdateFilesHash(
+    dbCursor: CursorInterface, 
+    rootDir: Path, 
+    files_id_path: List[Tuple[int, str]], 
+    table_name: str
+):  
+    relPaths = [path for _, path in files_id_path]
+    absPaths = [str(Path(rootDir,path)) for _, path in files_id_path]
+    hashes = goFilesHash(absPaths)
+
+    for file_path, file_hash in zip(relPaths, hashes):
+        if file_hash[:5] != "Error":
+            dbCursor.execute(
+                f"UPDATE {table_name} SET file_hash = %s WHERE relative_path = %s",
+                (file_hash, file_path)
+            )
+        else:
+            print(file_hash)
+
 
 def prettyPrint(
     dbCursor: ExtendedCursorInterface, 
