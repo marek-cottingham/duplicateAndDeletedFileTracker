@@ -10,10 +10,10 @@ according to the structure in 'duplicateAndDeletedFileTracker\config_TEMPLATE.py
 Example use case:
 1) Set photo archive path as rootPath in config.
 2) Run resetDatabase.py in order to setup the database for the first time.
-3) Run main.py in order to log the current state of the database.
+3) Run updateDatabase.py in order to log the current state of the database.
 4) Add photos from phone to photo archive in a new folder.
-5) Run main.py to remove all duplicates.
+5) Run updateDatabase.py to remove all duplicates.
 6) Manually sort the photos and delete ones you don't want to keep.
-7) Run main.py to log which photos were moved / deleted.
+7) Run updateDatabase.py to log which photos were moved / deleted.
 8) At a later date, add photos from phone again.
-9) Run main.py to remove duplicates and photos the user previously decide to delete, leaving them with just the new photos from their phone.
+9) Run updateDatabase.py to remove duplicates and photos the user previously decide to delete, leaving them with just the new photos from their phone.
