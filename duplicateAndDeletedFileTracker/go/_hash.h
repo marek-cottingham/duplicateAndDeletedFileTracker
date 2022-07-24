@@ -73,7 +73,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern __declspec(dllexport) char** c_hash_list(char** path_list, int length);
+extern __declspec(dllexport) char** c_hash_list(char** path_list, GoInt length);
 extern __declspec(dllexport) void free_string_array(char** p);
 extern __declspec(dllexport) char* c_hash_file(char* path);
 extern __declspec(dllexport) void free_string(char* p);

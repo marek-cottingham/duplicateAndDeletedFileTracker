@@ -3,8 +3,7 @@ package c_arrstr
 import "unsafe"
 import "C"
 
-type Ref_ref_string **C.char
-type C_int C.int
+type PP_char **C.char
 
 func From_go_to_c(original []string) unsafe.Pointer {
 	cArray := C.malloc(C.size_t(len(original)) * C.size_t(unsafe.Sizeof(uintptr(0))))
@@ -15,9 +14,9 @@ func From_go_to_c(original []string) unsafe.Pointer {
 	return cArray
 }
 
-func From_c_to_go(path_list **C.char, length C.int) []string {
+func From_c_to_go(arr_str PP_char, length int) []string {
 	var slice []string
-	for _, s := range unsafe.Slice(path_list, length) {
+	for _, s := range unsafe.Slice(arr_str, length) {
 		if s == nil {
 			break
 		}

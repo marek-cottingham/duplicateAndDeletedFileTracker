@@ -7,36 +7,21 @@ import "C"
 import (
 	"unsafe"
 
+	"marek/duplicateAndDeletedFileTracker/duplicateAndDeletedFileTracker/go/c_arrstr"
 	"marek/duplicateAndDeletedFileTracker/duplicateAndDeletedFileTracker/go/hash"
 )
 
 //export c_hash_list
-func c_hash_list(path_list **C.char, length C.int) **C.char {
-	slice := arrayString_from_c_to_go(path_list, length)
+func c_hash_list(path_list **C.char, length int) **C.char {
+	// In order to pass path_list to the package c_arrstr,
+	// we need to convert it to use the **C.char type from the package c_arrstr
+	// which is exported under the name PP_char.
+	retyped_path_list := c_arrstr.PP_char(unsafe.Pointer(path_list))
+
+	slice := c_arrstr.From_c_to_go(retyped_path_list, length)
 	hashes := hash.Hash_list(slice)
-	cArray := arrayString_from_go_to_c(hashes)
+	cArray := c_arrstr.From_go_to_c(hashes)
 	return (**C.char)(cArray)
-}
-
-func arrayString_from_go_to_c(original []string) unsafe.Pointer {
-	cArray := C.malloc(C.size_t(len(original)) * C.size_t(unsafe.Sizeof(uintptr(0))))
-	goArray := (*[1<<30 - 1]*C.char)(cArray)
-	for idx, substring := range original {
-		goArray[idx] = C.CString(substring)
-	}
-	return cArray
-}
-
-func arrayString_from_c_to_go(path_list **C.char, length C.int) []string {
-	var slice []string
-	for _, s := range unsafe.Slice(path_list, length) {
-		if s == nil {
-			break
-		}
-		x := C.GoString(s)
-		slice = append(slice, x)
-	}
-	return slice
 }
 
 //export free_string_array
