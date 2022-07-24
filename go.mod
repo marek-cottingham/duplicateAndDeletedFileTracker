@@ -1,4 +1,4 @@
-module duplicateAndDeletedFileTracker/hash
+module marek/duplicateAndDeletedFileTracker
 
 go 1.18
 
