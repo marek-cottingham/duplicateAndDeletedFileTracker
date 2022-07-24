@@ -1,9 +1,13 @@
 import ctypes
 from typing import List, Type
 
-def goFilesHash(
+def goHashFiles(
     filePaths: List[str]
 )->List[str]:
+    """Returns a list of hashes for the given file paths. If an error occurs,
+    the hash for that file will be a string with the error message (starting
+    with "Error:" )."""
+    
     c_array_str, convertedFilePaths = _stringList_to_CstringArray(filePaths)
 
     lib = ctypes.cdll.LoadLibrary('./duplicateAndDeletedFileTracker/go/_hash.so')

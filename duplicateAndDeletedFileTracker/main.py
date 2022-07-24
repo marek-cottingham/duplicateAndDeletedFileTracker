@@ -12,7 +12,7 @@ from typing import Callable, Iterable, List, Tuple
 import psycopg2
 
 from . import queries
-from .goInterface import goFilesHash
+from .goInterface import goHashFiles
 
 
 class CursorInterface(ABC):
@@ -121,7 +121,7 @@ def goUpdateFilesHash(
 ):  
     relPaths = [path for _, path in files_id_path]
     absPaths = [str(Path(rootDir,path)) for _, path in files_id_path]
-    hashes = goFilesHash(absPaths)
+    hashes = goHashFiles(absPaths)
 
     for file_path, file_hash in zip(relPaths, hashes):
         if file_hash[:5] != "Error":
