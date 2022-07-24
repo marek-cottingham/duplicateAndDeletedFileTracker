@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// To test, run `go test ./... -fuzz=Fuzz` in this file's directory.
+
 func FuzzArrStr(f *testing.F) {
 	f.Add("a", "b4i4i", "Error: misc")
 	f.Add("b", "b4i4iaeddedaddadeddad", "")
