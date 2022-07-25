@@ -40,17 +40,26 @@ class CursorWrapper(ExtendedCursorInterface):
         self.execute(query, param)
         return self.fetchall()
 
-@contextlib.contextmanager
-def openConnection(params: dict):
-    conn = psycopg2.connect(**params)
-    cursor = conn.cursor()
-    cursorWrapper = CursorWrapper(cursor)
-    try:
-        yield cursorWrapper
-    finally:
-        cursor.close()
-        conn.commit()
-        conn.close()
+class openConnection:
+    def __init__(self, db_params: str):
+        self.db_params = db_params
+        self.connection = None
+        self.cursor = None
+        self.cursor_wrapper = None
+
+    def __enter__(self):
+        self.connection = psycopg2.connect(**self.db_params)
+        self.cursor = self.connection.cursor()
+        self.cursor_wrapper = CursorWrapper(self.cursor)
+        return self.cursor_wrapper
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.cursor.close()
+        if exc_type is None:
+            self.connection.commit()
+        else:
+            self.connection.rollback()
+        self.connection.close()
 
 def hashFile(path):
     BUF_SIZE = 65536  # lets read stuff in 64kb chunks!
